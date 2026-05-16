@@ -1,0 +1,147 @@
+@page "/trauma"
+
+<PageTitle>Trauma Roller</PageTitle>
+
+<h1>Trauma Roller</h1>
+<p class="text-muted">
+    Roll D66 on the Trauma Table for each Elite that took Injury Dice and wasn't killed
+    outright. Non-Elite Troops are simply removed (no roll).
+</p>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label" for="unit-name">Unit name</label>
+                <input id="unit-name" class="form-control" placeholder="e.g. Brother Joachim"
+                       @bind="_unitName" @bind:event="oninput" @onkeydown="OnKeyDown" />
+            </div>
+            <div class="col-md-2">
+                <div class="form-check">
+                    <input id="is-elite" class="form-check-input" type="checkbox" @bind="_isElite" />
+                    <label class="form-check-label" for="is-elite">Elite?</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="manual-roll">Manual D66 (optional)</label>
+                <input id="manual-roll" class="form-control" type="number" min="11" max="66"
+                       placeholder="auto" @bind="_manualRoll" disabled="@(!_isElite)" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" @onclick="Resolve"
+                        disabled="@string.IsNullOrWhiteSpace(_unitName)">
+                    @(_isElite ? "Roll" : "Log")
+                </button>
+            </div>
+        </div>
+
+        @if (_validationError is not null)
+        {
+            <div class="alert alert-warning mt-3 mb-0">@_validationError</div>
+        }
+    </div>
+</div>
+
+@if (_log.Count > 0)
+{
+    <h2>Session log</h2>
+    <button class="btn btn-sm btn-outline-secondary mb-3" @onclick="() => _log.Clear()">Clear log</button>
+
+    <div class="list-group">
+        @foreach (var entry in _log.AsEnumerable().Reverse())
+        {
+            <div class="list-group-item">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">
+                        @entry.UnitName
+                        <span class="badge bg-secondary">@(entry.IsElite ? "Elite" : "Troop")</span>
+                        @if (entry.IsElite && entry.D66 is int r)
+                        {
+                            <span class="badge bg-dark">D66: @r</span>
+                        }
+                    </h5>
+                    <small class="text-muted">@entry.Timestamp.ToShortTimeString()</small>
+                </div>
+                <p class="mb-1"><strong>@entry.ResultTitle</strong></p>
+                <p class="mb-0 small">@entry.ResultDescription</p>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private string _unitName = "";
+    private bool _isElite = true;
+    private int? _manualRoll;
+    private string? _validationError;
+    private readonly List<LogEntry> _log = new();
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_unitName))
+        {
+            Resolve();
+        }
+    }
+
+    private void Resolve()
+    {
+        _validationError = null;
+
+        if (string.IsNullOrWhiteSpace(_unitName))
+        {
+            _validationError = "Unit name is required.";
+            return;
+        }
+
+        LogEntry entry;
+        if (!_isElite)
+        {
+            entry = new LogEntry(
+                _unitName.Trim(),
+                IsElite: false,
+                D66: null,
+                ResultTitle: "Removed",
+                ResultDescription: "Troop killed in action. Remove the model from your Warband Roster (or keep on roster as a Troop if your Patron rules allow).",
+                Timestamp: DateTime.Now);
+        }
+        else
+        {
+            int roll;
+            if (_manualRoll is int m)
+            {
+                if (m is < 11 or > 66 || m % 10 == 0 || m / 10 < 1 || m / 10 > 6 || m % 10 > 6)
+                {
+                    _validationError = "Manual D66 must be a valid two-digit reading: tens 1-6 and ones 1-6 (e.g. 11, 36, 66).";
+                    return;
+                }
+                roll = m;
+            }
+            else
+            {
+                roll = Dice.D66();
+            }
+
+            var traumaResult = TraumaTable.Lookup(roll);
+            entry = new LogEntry(
+                _unitName.Trim(),
+                IsElite: true,
+                D66: roll,
+                ResultTitle: traumaResult.Title,
+                ResultDescription: traumaResult.Description,
+                Timestamp: DateTime.Now);
+        }
+
+        _log.Add(entry);
+        _unitName = "";
+        _manualRoll = null;
+    }
+
+    private sealed record LogEntry(
+        string UnitName,
+        bool IsElite,
+        int? D66,
+        string ResultTitle,
+        string ResultDescription,
+        DateTime Timestamp);
+}
