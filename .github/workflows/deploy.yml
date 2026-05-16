@@ -21,11 +21,20 @@ jobs:
       - name: Publish
         run: dotnet publish TrenchAftermath/TrenchAftermath.csproj -c Release -o output
 
+      - name: Show publish output
+        run: |
+          echo "=== output/ ==="
+          ls -la output/ || true
+          echo
+          echo "=== output/wwwroot/ ==="
+          ls -la output/wwwroot/ || true
+          echo
+          echo "=== output/wwwroot/_framework/ (first 20) ==="
+          ls -la output/wwwroot/_framework/ 2>/dev/null | head -20 || true
+
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: trench-aftermath
-          directory: output/wwwroot
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          command: pages deploy output/wwwroot --project-name=trench-aftermath --branch=main
