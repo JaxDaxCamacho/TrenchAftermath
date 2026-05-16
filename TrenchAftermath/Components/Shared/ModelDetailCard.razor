@@ -1,0 +1,76 @@
+@namespace TrenchAftermath.Components.Shared
+
+<div class="card h-100 @(Highlight ? "border-success" : "")">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h5 class="card-title mb-1">
+                    @Model.Name
+                    @if (Model.IsElite)
+                    {
+                        <span class="badge bg-info ms-1">Elite</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary ms-1">Troop</span>
+                    }
+                    @if (Highlight && !string.IsNullOrEmpty(HighlightLabel))
+                    {
+                        <span class="badge bg-success ms-1">@HighlightLabel</span>
+                    }
+                </h5>
+                <small class="text-muted">@Model.ModelId</small>
+            </div>
+            @if (CostText is not null)
+            {
+                <small class="text-muted">@CostText</small>
+            }
+        </div>
+
+        <div class="row row-cols-2 row-cols-md-4 g-1 small mt-2 mb-2">
+            <div><strong>Move:</strong> @Model.StatMove</div>
+            <div><strong>Melee:</strong> @Model.StatMelee</div>
+            <div><strong>Ranged:</strong> @Model.StatRanged</div>
+            <div><strong>Armour:</strong> @Model.StatArmour</div>
+        </div>
+
+        @{
+            var equip = Model.Equipment.ToList();
+            var abil  = Model.Abilities.ToList();
+            var kws   = Model.Keywords.ToList();
+            var inj   = Model.Injuries.ToList();
+        }
+
+        @if (equip.Count > 0)
+        {
+            <div class="small mb-1">
+                <strong>Equipment:</strong> @string.Join(", ", equip)
+            </div>
+        }
+        @if (abil.Count > 0)
+        {
+            <div class="small mb-1">
+                <strong>Abilities:</strong> @string.Join(", ", abil)
+            </div>
+        }
+        @if (kws.Count > 0)
+        {
+            <div class="small mb-1">
+                <strong>Keywords:</strong> @string.Join(", ", kws)
+            </div>
+        }
+        @if (inj.Count > 0)
+        {
+            <div class="small mb-1 text-danger">
+                <strong>Injuries:</strong> @string.Join(", ", inj)
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ModelEntry Model { get; set; } = default!;
+    [Parameter] public bool Highlight { get; set; }
+    [Parameter] public string? HighlightLabel { get; set; }
+    [Parameter] public string? CostText { get; set; }
+}

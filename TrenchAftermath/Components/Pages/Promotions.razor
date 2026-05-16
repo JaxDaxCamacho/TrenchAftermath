@@ -1,13 +1,349 @@
 @page "/promotions"
+@inject WarbandStore Store
 
 <PageTitle>Promotions</PageTitle>
 
-<h1>Promotions</h1>
-<p class="text-muted">Coming next — M2.</p>
+<h1>Promotions &amp; Experience</h1>
 
-<div class="alert alert-info">
-    Import a Warband JSON, build the Promotion Dice Pool from Glorious Deeds, assign dice
-    to Troops (respecting the "no third die until everyone has two" rule), then slow-roll
-    one die at a time. The pity-timer carries across games: after 5 failed dice in a row,
-    the 6th rolled die auto-succeeds.
-</div>
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_flow is null)
+{
+    @if (_saved.Count > 0)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Saved warbands</h5>
+                <div class="list-group">
+                    @foreach (var s in _saved)
+                    {
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>@s.Name</strong>
+                                <small class="text-muted ms-2">@s.Id · saved @s.SavedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-primary me-1" @onclick="() => LoadSaved(s.Id)">Load</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSaved(s.Id)">Delete</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Import a new warband</h5>
+            <p class="text-muted small mb-3">Imported warbands are auto-saved to this browser's local storage and listed above.</p>
+
+            <label class="form-label">Upload warband JSON</label>
+            <InputFile class="form-control mb-3" OnChange="OnFileSelected" accept=".json,application/json" />
+
+            <label class="form-label">…or paste JSON</label>
+            <textarea class="form-control font-monospace" rows="6"
+                      placeholder='{ "warband-name": "...", "models": [ ... ] }'
+                      @bind="_pastedJson"></textarea>
+            <button class="btn btn-primary mt-2" @onclick="ImportPasted"
+                    disabled="@string.IsNullOrWhiteSpace(_pastedJson)">
+                Import pasted JSON
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body py-2 d-flex justify-content-between align-items-center">
+            <div>
+                <strong>@_flow.Warband.WarbandName</strong>
+                <span class="text-muted ms-2">
+                    @_flow.Warband.Models.Count models
+                    &middot; @_flow.Troops.Count Troops
+                    &middot; Pity counter: <strong>@_flow.PityCounter</strong>/5
+                </span>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Reset">Back to warband list</button>
+        </div>
+    </div>
+
+    @switch (_flow.Phase)
+    {
+        case PromotionsPhase.PoolSetup:
+            <h2 class="h4">Step 1 &mdash; Build the Promotion Dice Pool</h2>
+            <p class="text-muted">
+                Pool = <strong>1</strong> base + <strong>1</strong> per Glorious Deed +
+                any bonus dice from Skills / Glory Items.
+            </p>
+
+            @if (_flow.Troops.Count == 0)
+            {
+                <div class="alert alert-warning">
+                    No Troops in this warband &mdash; every model already has the
+                    <code>kw_elite</code> keyword. Nothing to promote.
+                </div>
+            }
+            else
+            {
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Glorious Deeds this game</label>
+                        <input type="number" min="0" class="form-control"
+                               @bind="_flow.GloriousDeeds" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Bonus dice (Skills, Glory Items, &hellip;)</label>
+                        <input type="number" min="0" class="form-control"
+                               @bind="_flow.ManualBonus" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-control-plaintext">
+                            Pool size: <strong>@_flow.PoolSize</strong> dice
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary mt-3" @onclick="GeneratePool">Generate pool &rarr;</button>
+            }
+            break;
+
+        case PromotionsPhase.Assignment:
+            <h2 class="h4">Step 2 &mdash; Assign dice to Troops</h2>
+            <p class="text-muted">
+                Pool: <strong>@_flow.UnassignedCount</strong> unassigned of @_flow.Pool.Count.
+                Rule: no Troop can hold an N<sup>th</sup> die until every Troop has at least
+                N&minus;1 dice. Unassigned dice are lost.
+            </p>
+
+            <div class="row g-3">
+                @foreach (var troop in _flow.Troops)
+                {
+                    var count = _flow.AssignedCount(troop.Index);
+                    var canAdd = _flow.CanAssignTo(troop.Index);
+                    var canRemove = count > 0;
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title mb-1">@troop.Name</h5>
+                                <small class="text-muted d-block mb-2">@troop.ModelId</small>
+                                <div class="mb-2">
+                                    @for (var i = 0; i < count; i++)
+                                    {
+                                        <span class="badge bg-primary me-1" style="font-size:1rem;min-width:2rem;">?</span>
+                                    }
+                                    @if (count == 0)
+                                    {
+                                        <em class="text-muted">no dice</em>
+                                    }
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary me-1"
+                                        @onclick="() => _flow.TryUnassignLast(troop.Index)"
+                                        disabled="@(!canRemove)">−</button>
+                                <button class="btn btn-sm btn-primary"
+                                        @onclick="() => _flow.TryAssignNext(troop.Index)"
+                                        disabled="@(!canAdd)">+ Assign die</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <button class="btn btn-primary mt-4" @onclick="BeginRolling"
+                    disabled="@(!_flow.CanBeginRolling())">
+                Begin slow roll &rarr;
+            </button>
+            break;
+
+        case PromotionsPhase.SlowRoll:
+        case PromotionsPhase.Done:
+            <h2 class="h4">Step 3 &mdash; Slow roll</h2>
+            <p class="text-muted">
+                Click one die at a time. As soon as a model rolls a <strong>6</strong>, they're promoted
+                and remaining dice are unused. After <strong>5 failed dice in a row</strong>, the next
+                die rolled auto-succeeds.
+            </p>
+
+            @if (_flow.PityCounter >= 5 && _flow.Phase == PromotionsPhase.SlowRoll)
+            {
+                <div class="alert alert-warning">
+                    <strong>Pity timer triggered!</strong> The next die rolled will be treated as a 6
+                    and auto-promote that model.
+                </div>
+            }
+
+            <div class="row g-3">
+                @foreach (var troop in _flow.Troops)
+                {
+                    var dice = _flow.Pool.Where(d => d.AssignedTroopIndex == troop.Index).ToList();
+                    if (dice.Count == 0) continue;
+                    var promoted = _flow.PromotedTroopIndexes.Contains(troop.Index);
+                    var nextDie = _flow.NextDieFor(troop.Index);
+
+                    <div class="col-md-6">
+                        <div class="card h-100 @(promoted ? "border-success" : "")">
+                            <div class="card-body">
+                                <h5 class="card-title mb-1">
+                                    @troop.Name
+                                    @if (promoted)
+                                    {
+                                        <span class="badge bg-success ms-2">PROMOTED → ELITE</span>
+                                    }
+                                </h5>
+                                <small class="text-muted d-block mb-2">@troop.ModelId</small>
+
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    @foreach (var d in dice)
+                                    {
+                                        @if (d.Status == DieStatus.Rolled)
+                                        {
+                                            var cls = d.RolledValue == 6 ? "bg-success" : "bg-secondary";
+                                            <span class="badge @cls" style="font-size:1.1rem;min-width:2.2rem;">
+                                                @d.RolledValue
+                                                @if (d.WasPityTriggered)
+                                                {
+                                                    <small>★</small>
+                                                }
+                                            </span>
+                                        }
+                                        else if (d.Status == DieStatus.Skipped)
+                                        {
+                                            <span class="badge bg-light text-muted text-decoration-line-through"
+                                                  style="font-size:1.1rem;min-width:2.2rem;">−</span>
+                                        }
+                                        else if (d == nextDie)
+                                        {
+                                            <button class="btn btn-outline-primary btn-sm"
+                                                    style="min-width:3rem;"
+                                                    @onclick="() => RollDie(d)">
+                                                Roll
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-light text-muted" style="font-size:1.1rem;min-width:2.2rem;">?</span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (_flow.Phase == PromotionsPhase.Done)
+            {
+                <div class="alert alert-success mt-4">
+                    <h5 class="alert-heading">All dice rolled.</h5>
+                    <p class="mb-0">
+                        Promotions: <strong>@_flow.PromotedTroopIndexes.Count</strong>.
+                        New pity counter (carries to next game): <strong>@_flow.PityCounter</strong>/5.
+                    </p>
+                </div>
+
+                @if (_flow.PromotedTroopIndexes.Count > 0)
+                {
+                    <h3 class="h5 mt-4">Promoted models</h3>
+                    <p class="text-muted small">
+                        These Troops are now ELITE for the rest of the campaign. Update your trench-companion
+                        roster to reflect the promotion the next time you sync.
+                    </p>
+                    <div class="row g-3">
+                        @foreach (var idx in _flow.PromotedTroopIndexes)
+                        {
+                            var m = _flow.Warband.Models.First(x => x.Index == idx);
+                            <div class="col-md-6">
+                                <ModelDetailCard Model="m" Highlight="true" HighlightLabel="PROMOTED → ELITE" />
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            break;
+    }
+}
+
+@code {
+    private PromotionsFlow? _flow;
+    private string? _pastedJson;
+    private string? _error;
+    private List<SavedWarbandRef> _saved = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _saved = await Store.ListAsync();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(10 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var text = await reader.ReadToEndAsync();
+            await TryParseAndSave(text);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't read file: {ex.Message}";
+        }
+    }
+
+    private async Task ImportPasted()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_pastedJson)) return;
+        await TryParseAndSave(_pastedJson);
+    }
+
+    private async Task TryParseAndSave(string json)
+    {
+        try
+        {
+            var session = WarbandSession.Parse(json);
+            await Store.SaveAsync(session);
+            _saved = await Store.ListAsync();
+            _flow = new PromotionsFlow(session);
+            _pastedJson = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't parse warband JSON: {ex.Message}";
+        }
+    }
+
+    private async Task LoadSaved(string id)
+    {
+        _error = null;
+        var session = await Store.LoadAsync(id);
+        if (session is null)
+        {
+            _error = "Couldn't load that warband — it may have been deleted.";
+            _saved = await Store.ListAsync();
+            return;
+        }
+        _flow = new PromotionsFlow(session);
+    }
+
+    private async Task DeleteSaved(string id)
+    {
+        await Store.DeleteAsync(id);
+        _saved = await Store.ListAsync();
+    }
+
+    private void GeneratePool() => _flow?.GeneratePool();
+    private void BeginRolling() => _flow?.BeginRolling();
+    private void RollDie(PromotionDie die) => _flow?.RollDie(die);
+
+    private void Reset()
+    {
+        _flow = null;
+        _error = null;
+        _pastedJson = null;
+    }
+
+}

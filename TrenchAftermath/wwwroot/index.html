@@ -26,6 +26,19 @@
     </div>
 
     <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        window.downloadText = function (filename, mimeType, content) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+    </script>
 </body>
 
 </html>
