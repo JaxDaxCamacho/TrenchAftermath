@@ -1,0 +1,52 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish
+        run: dotnet publish TrenchAftermath/TrenchAftermath.csproj -c Release -o output
+
+      - name: Verify output
+        run: |
+          echo "=== output/wwwroot/ ==="
+          ls -la output/wwwroot/ || ls -la output/
+          if [ -f "output/index.html" ]; then
+            echo "Using output/ (Blazor WASM standard layout)"
+          elif [ -f "output/wwwroot/index.html" ]; then
+            echo "Using output/wwwroot/"
+            mv output/wwwroot/* output/
+          else
+            echo "ERROR: Cannot find index.html"
+            exit 1
+          fi
+          # GitHub Pages uses Jekyll by default, which ignores _framework
+          touch output/.nojekyll
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: output
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
