@@ -32,22 +32,22 @@ jobs:
 
       - name: Verify output exists
         run: |
-          echo "=== output/ contents ==="
-          ls -la output/
-          if [ ! -f "output/index.html" ]; then
-            echo "ERROR: index.html not found in output!"
+          echo "=== output/wwwroot/ contents ==="
+          ls -la output/wwwroot/
+          if [ ! -f "output/wwwroot/index.html" ]; then
+            echo "ERROR: index.html not found in output/wwwroot!"
             exit 1
           fi
-          if [ ! -d "output/_framework" ]; then
-            echo "ERROR: _framework directory not found in output!"
+          if [ ! -d "output/wwwroot/_framework" ]; then
+            echo "ERROR: _framework directory not found in output/wwwroot!"
             exit 1
           fi
-          echo "=== output/_framework/ (first 20 files) ==="
-          ls -la output/_framework/ | head -20
+          echo "=== output/wwwroot/_framework/ (first 20 files) ==="
+          ls -la output/wwwroot/_framework/ | head -20
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy output --project-name=trench-aftermath --branch=main
+          command: pages deploy output/wwwroot --project-name=trench-aftermath --branch=main
