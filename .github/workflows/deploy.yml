@@ -18,16 +18,32 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Publish
-        run: dotnet publish TrenchAftermath/TrenchAftermath.csproj -c Release -o output
+      - name: Show dotnet version
+        run: dotnet --info
 
-      - name: Show publish output
+      - name: Restore dependencies
+        run: dotnet restore TrenchAftermath/TrenchAftermath.csproj
+
+      - name: Build
+        run: dotnet build TrenchAftermath/TrenchAftermath.csproj -c Release --no-restore
+
+      - name: Publish
+        run: dotnet publish TrenchAftermath/TrenchAftermath.csproj -c Release --no-build -o output
+
+      - name: Verify output exists
         run: |
-          echo "=== output/ ==="
-          ls -la output/ || true
-          echo
-          echo "=== output/_framework/ (first 20) ==="
-          ls -la output/_framework/ 2>/dev/null | head -20 || true
+          echo "=== output/ contents ==="
+          ls -la output/
+          if [ ! -f "output/index.html" ]; then
+            echo "ERROR: index.html not found in output!"
+            exit 1
+          fi
+          if [ ! -d "output/_framework" ]; then
+            echo "ERROR: _framework directory not found in output!"
+            exit 1
+          fi
+          echo "=== output/_framework/ (first 20 files) ==="
+          ls -la output/_framework/ | head -20
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

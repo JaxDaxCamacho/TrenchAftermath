@@ -9,7 +9,9 @@
       "Bash(python3 -c \"import fitz; print\\(fitz.__version__\\)\")",
       "Bash(python3 *)",
       "Bash(dotnet --version)",
-      "Bash(dotnet --list-sdks)"
+      "Bash(dotnet --list-sdks)",
+      "Bash(dotnet publish *)",
+      "Bash(gh run *)"
     ]
   }
 }
