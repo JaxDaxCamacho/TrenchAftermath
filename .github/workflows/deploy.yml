@@ -48,6 +48,6 @@ jobs:
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: cfut_1qotSgF9kjCQCNmCTdiMaKEoseJCTTE0FuNu4vfT7af38d4a
+          accountId: d65430c93e1bd2a3541f673a0c26877c
           command: pages deploy output/wwwroot --project-name=trench-aftermath --branch=main
