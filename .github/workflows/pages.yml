@@ -43,6 +43,10 @@ jobs:
           # GitHub Pages uses Jekyll by default, which ignores _framework
           touch output/.nojekyll
 
+      - name: Set base path for GitHub Pages
+        run: |
+          sed -i 's|<base href="/" />|<base href="/TrenchAftermath/" />|g' output/index.html
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
