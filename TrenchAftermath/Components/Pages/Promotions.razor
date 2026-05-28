@@ -1,59 +1,70 @@
 @page "/promotions"
 @inject WarbandStore Store
+@inject SessionState Session
+@implements IDisposable
 
 <PageTitle>Promotions</PageTitle>
 
 <h1>Promotions &amp; Experience</h1>
 
-@if (_error is not null)
+@if (Session.CurrentWarband is null)
 {
-    <div class="alert alert-danger">@_error</div>
+    <div class="alert alert-info">
+        <h5 class="alert-heading">No warband loaded</h5>
+        <p class="mb-0">Import a warband first to run the Promotions step.</p>
+    </div>
+    <a href="/" class="btn btn-primary">Go to Home</a>
 }
-
-@if (_flow is null)
+else if (_flow is null)
 {
-    @if (_saved.Count > 0)
+    <div class="card mb-3">
+        <div class="card-body py-2 d-flex justify-content-between align-items-center">
+            <div>
+                <strong>@Session.CurrentWarband.WarbandName</strong>
+                <span class="text-muted ms-2">
+                    @Session.CurrentWarband.Models.Count models
+                    &middot; Pity counter: <strong>@Session.CurrentWarband.ConsecutiveFailedPromotionDice</strong>/5
+                </span>
+            </div>
+            <a href="/" class="btn btn-sm btn-outline-secondary">Change warband</a>
+        </div>
+    </div>
+
+    <h2 class="h4">Step 1 &mdash; Build the Promotion Dice Pool</h2>
+    <p class="text-muted">
+        Pool = <strong>1</strong> base + <strong>1</strong> per Glorious Deed +
+        any bonus dice from Skills / Glory Items.
+    </p>
+
+    @if (_troopCount == 0)
     {
-        <div class="card mb-3">
-            <div class="card-body">
-                <h5 class="card-title">Saved warbands</h5>
-                <div class="list-group">
-                    @foreach (var s in _saved)
-                    {
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>@s.Name</strong>
-                                <small class="text-muted ms-2">@s.Id · saved @s.SavedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
-                            </div>
-                            <div>
-                                <button class="btn btn-sm btn-primary me-1" @onclick="() => LoadSaved(s.Id)">Load</button>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSaved(s.Id)">Delete</button>
-                            </div>
-                        </div>
-                    }
+        <div class="alert alert-warning">
+            No Troops in this warband &mdash; every model already has the
+            <code>kw_elite</code> keyword. Nothing to promote.
+        </div>
+    }
+    else
+    {
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Glorious Deeds this game</label>
+                <input type="number" min="0" class="form-control"
+                       @bind="_gloriousDeeds" @bind:event="oninput" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Bonus dice (Skills, Glory Items, &hellip;)</label>
+                <input type="number" min="0" class="form-control"
+                       @bind="_manualBonus" @bind:event="oninput" />
+            </div>
+            <div class="col-md-4">
+                <div class="form-control-plaintext">
+                    Pool size: <strong>@(1 + _gloriousDeeds + _manualBonus)</strong> dice
                 </div>
             </div>
         </div>
+
+        <button class="btn btn-primary mt-3" @onclick="StartPromotions">Start Promotions &rarr;</button>
     }
-
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">Import a new warband</h5>
-            <p class="text-muted small mb-3">Imported warbands are auto-saved to this browser's local storage and listed above.</p>
-
-            <label class="form-label">Upload warband JSON</label>
-            <InputFile class="form-control mb-3" OnChange="OnFileSelected" accept=".json,application/json" />
-
-            <label class="form-label">…or paste JSON</label>
-            <textarea class="form-control font-monospace" rows="6"
-                      placeholder='{ "warband-name": "...", "models": [ ... ] }'
-                      @bind="_pastedJson"></textarea>
-            <button class="btn btn-primary mt-2" @onclick="ImportPasted"
-                    disabled="@string.IsNullOrWhiteSpace(_pastedJson)">
-                Import pasted JSON
-            </button>
-        </div>
-    </div>
 }
 else
 {
@@ -67,7 +78,7 @@ else
                     &middot; Pity counter: <strong>@_flow.PityCounter</strong>/5
                 </span>
             </div>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="Reset">Back to warband list</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Reset">Start over</button>
         </div>
     </div>
 
@@ -261,6 +272,12 @@ else
                         }
                     </div>
                 }
+
+                <div class="mt-4">
+                    <button class="btn btn-primary" @onclick="SaveAndReturn">
+                        Save & Return to Home
+                    </button>
+                </div>
             }
             break;
     }
@@ -268,71 +285,26 @@ else
 
 @code {
     private PromotionsFlow? _flow;
-    private string? _pastedJson;
-    private string? _error;
-    private List<SavedWarbandRef> _saved = new();
+    private int _gloriousDeeds;
+    private int _manualBonus;
+    private int _troopCount => Session.CurrentWarband?.Models.Count(m => !m.IsElite) ?? 0;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        _saved = await Store.ListAsync();
+        Session.OnChange += StateHasChanged;
     }
 
-    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    public void Dispose()
     {
-        _error = null;
-        try
-        {
-            await using var stream = e.File.OpenReadStream(10 * 1024 * 1024);
-            using var reader = new StreamReader(stream);
-            var text = await reader.ReadToEndAsync();
-            await TryParseAndSave(text);
-        }
-        catch (Exception ex)
-        {
-            _error = $"Couldn't read file: {ex.Message}";
-        }
+        Session.OnChange -= StateHasChanged;
     }
 
-    private async Task ImportPasted()
+    private void StartPromotions()
     {
-        _error = null;
-        if (string.IsNullOrWhiteSpace(_pastedJson)) return;
-        await TryParseAndSave(_pastedJson);
-    }
-
-    private async Task TryParseAndSave(string json)
-    {
-        try
-        {
-            var session = WarbandSession.Parse(json);
-            await Store.SaveAsync(session);
-            _saved = await Store.ListAsync();
-            _flow = new PromotionsFlow(session);
-            _pastedJson = null;
-        }
-        catch (Exception ex)
-        {
-            _error = $"Couldn't parse warband JSON: {ex.Message}";
-        }
-    }
-
-    private async Task LoadSaved(string id)
-    {
-        _error = null;
-        var session = await Store.LoadAsync(id);
-        if (session is null)
-        {
-            _error = "Couldn't load that warband — it may have been deleted.";
-            _saved = await Store.ListAsync();
-            return;
-        }
-        _flow = new PromotionsFlow(session);
-    }
-
-    private async Task DeleteSaved(string id)
-    {
-        await Store.DeleteAsync(id);
-        _saved = await Store.ListAsync();
+        if (Session.CurrentWarband is null) return;
+        _flow = new PromotionsFlow(Session.CurrentWarband);
+        _flow.GloriousDeeds = _gloriousDeeds;
+        _flow.ManualBonus = _manualBonus;
     }
 
     private void GeneratePool() => _flow?.GeneratePool();
@@ -342,8 +314,18 @@ else
     private void Reset()
     {
         _flow = null;
-        _error = null;
-        _pastedJson = null;
+        _gloriousDeeds = 0;
+        _manualBonus = 0;
     }
 
+    private async Task SaveAndReturn()
+    {
+        if (_flow is null) return;
+        _flow.ApplyToWarband();
+        await Store.SaveAsync(_flow.Warband);
+        Session.SetWarband(_flow.Warband);
+        _flow = null;
+        _gloriousDeeds = 0;
+        _manualBonus = 0;
+    }
 }
