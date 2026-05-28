@@ -26,15 +26,12 @@ jobs:
           echo "=== output/ ==="
           ls -la output/ || true
           echo
-          echo "=== output/wwwroot/ ==="
-          ls -la output/wwwroot/ || true
-          echo
-          echo "=== output/wwwroot/_framework/ (first 20) ==="
-          ls -la output/wwwroot/_framework/ 2>/dev/null | head -20 || true
+          echo "=== output/_framework/ (first 20) ==="
+          ls -la output/_framework/ 2>/dev/null | head -20 || true
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy output/wwwroot --project-name=trench-aftermath --branch=main
+          command: pages deploy output --project-name=trench-aftermath --branch=main
