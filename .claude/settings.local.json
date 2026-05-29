@@ -13,7 +13,8 @@
       "Bash(dotnet publish *)",
       "Bash(gh run *)",
       "Bash(curl *)",
-      "Bash(CLOUDFLARE_API_TOKEN=cfut_1qotSgF9kjCQCNmCTdiMaKEoseJCTTE0FuNu4vfT7af38d4a CLOUDFLARE_ACCOUNT_ID=d65430c93e1bd2a3541f673a0c26877c npx -y wrangler@latest whoami)"
+      "Bash(CLOUDFLARE_API_TOKEN=cfut_1qotSgF9kjCQCNmCTdiMaKEoseJCTTE0FuNu4vfT7af38d4a CLOUDFLARE_ACCOUNT_ID=d65430c93e1bd2a3541f673a0c26877c npx -y wrangler@latest whoami)",
+      "Bash(dotnet build *)"
     ]
   }
 }

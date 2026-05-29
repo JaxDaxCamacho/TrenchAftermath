@@ -1,13 +1,14 @@
 @page "/"
 @inject WarbandStore Store
 @inject SessionState Session
+@inject IJSRuntime JS
 @implements IDisposable
 
 <PageTitle>Trench Aftermath</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Trench Aftermath</h1>
-    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#howToModal">
+    <button class="btn btn-outline-secondary btn-sm" @onclick="OpenHowToModal">
         How To Add a Warband
     </button>
 </div>
@@ -228,5 +229,10 @@ else
     private void ClearWarband()
     {
         Session.ClearWarband();
+    }
+
+    private async Task OpenHowToModal()
+    {
+        await JS.InvokeVoidAsync("bootstrapModalOpen", "#howToModal");
     }
 }
